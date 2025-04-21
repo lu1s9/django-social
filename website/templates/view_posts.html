@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Mis Publicaciones</h2>
+<a href="{% url 'create_post' %}" class="btn btn-primary mb-3">Crear Nueva Publicación</a>
+<ul class="list-group">
+    {% for post in posts %}
+    <li class="list-group-item">
+        <p><strong>Publicado:</strong> {{ post.created_at|date:"d M Y H:i" }}</p>
+        <p>{{ post.content }}</p>
+        <a href="{% url 'update_post' post.pk %}" class="btn btn-sm btn-warning">Editar</a>
+        <a href="{% url 'delete_post' post.pk %}" class="btn btn-sm btn-danger">Eliminar</a>
+    </li>
+    {% empty %}
+    <li class="list-group-item">No tienes publicaciones aún.</li>
+    {% endfor %}
+</ul>
+{% endblock %}
