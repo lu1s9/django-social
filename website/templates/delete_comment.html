@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Eliminar Comentario</h2>
+<p>¿Estás seguro de que deseas eliminar este comentario?</p>
+<p><strong>{{ comment.content }}</strong></p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Eliminar</button>
+    <a href="{% url 'home' %}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

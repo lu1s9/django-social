@@ -24,3 +24,13 @@ class Friendship(models.Model):
 
     def __str__(self):
         return f"{self.user1.username} ↔ {self.user2.username}"
+
+class Comment(models.Model):
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='comments')  # Relación con la publicación
+    user = models.ForeignKey(User, on_delete=models.CASCADE)  # Relación con el usuario que comenta
+    content = models.TextField()  # Contenido del comentario
+    created_at = models.DateTimeField(auto_now_add=True)  # Fecha de creación
+    updated_at = models.DateTimeField(auto_now=True)  # Fecha de última actualización
+
+    def __str__(self):
+        return f"Comentario de {self.user.username} en {self.post.id}"

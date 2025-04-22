@@ -7,7 +7,7 @@ from .models import Post
 from django.contrib.auth.models import User
 from .models import FriendRequest, Friendship
 from itertools import chain
-
+from .models import Comment
 
 @login_required
 def send_friend_request(request, user_id):
@@ -38,25 +38,73 @@ def reject_friend_request(request, request_id):
 
 @login_required
 def home(request):
-    posts = Post.objects.filter(user=request.user).order_by('-created_at')
-    users = User.objects.exclude(id=request.user.id)  # Excluir al usuario actual
-
     # Obtener amigos del usuario
     friends_user1 = Friendship.objects.filter(user1=request.user).values_list('user2', flat=True)
     friends_user2 = Friendship.objects.filter(user2=request.user).values_list('user1', flat=True)
     friends = set(chain(friends_user1, friends_user2))  # Combinar ambos conjuntos de amigos
 
-    # Excluir amigos actuales de la lista de usuarios
-    users = users.exclude(id__in=friends)
+    # Obtener publicaciones propias y de amigos
+    posts = Post.objects.filter(user__in=friends | {request.user}).order_by('-created_at')
+
+    # Excluir amigos actuales de la lista de usuarios para enviar solicitudes
+    users = User.objects.exclude(id=request.user.id).exclude(id__in=friends)
 
     # Obtener solicitudes de amistad recibidas
     friend_requests = FriendRequest.objects.filter(to_user=request.user)
+
+    # Obtener amigos explícitamente para mostrarlos en la barra lateral
+    friends_list = User.objects.filter(id__in=friends)
 
     return render(request, 'home.html', {
         'posts': posts,
         'users': users,
         'friend_requests': friend_requests,
+        'friends_list': friends_list,
     })
+
+@login_required
+def add_comment(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+
+    # Verificar si el usuario es amigo del autor del post o es el autor
+    friends_user1 = Friendship.objects.filter(user1=request.user).values_list('user2', flat=True)
+    friends_user2 = Friendship.objects.filter(user2=request.user).values_list('user1', flat=True)
+    friends = set(chain(friends_user1, friends_user2))
+    if post.user != request.user and post.user.id not in friends:
+        messages.error(request, "No puedes comentar en esta publicación.")
+        return redirect('home')
+
+    if request.method == 'POST':
+        content = request.POST.get('content')
+        if content:
+            Comment.objects.create(post=post, user=request.user, content=content)
+            messages.success(request, "Comentario agregado exitosamente.")
+        else:
+            messages.error(request, "El comentario no puede estar vacío.")
+        return redirect('home')
+
+@login_required
+def edit_comment(request, comment_id):
+    comment = get_object_or_404(Comment, id=comment_id, user=request.user)
+    if request.method == 'POST':
+        content = request.POST.get('content')
+        if content:
+            comment.content = content
+            comment.save()
+            messages.success(request, "Comentario actualizado exitosamente.")
+        else:
+            messages.error(request, "El comentario no puede estar vacío.")
+        return redirect('home')
+    return render(request, 'edit_comment.html', {'comment': comment})
+
+@login_required
+def delete_comment(request, comment_id):
+    comment = get_object_or_404(Comment, id=comment_id, user=request.user)
+    if request.method == 'POST':
+        comment.delete()
+        messages.success(request, "Comentario eliminado exitosamente.")
+        return redirect('home')
+    return render(request, 'delete_comment.html', {'comment': comment})
 
 def login_user(request):
     if request.method == 'POST':
