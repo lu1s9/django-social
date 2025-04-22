@@ -4,31 +4,59 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from .forms import SignUpForm, AddPostForm
 from .models import Post
+from django.contrib.auth.models import User
+from .models import FriendRequest, Friendship
+from itertools import chain
 
 
+@login_required
+def send_friend_request(request, user_id):
+    to_user = get_object_or_404(User, id=user_id)
+    if FriendRequest.objects.filter(from_user=request.user, to_user=to_user).exists():
+        messages.error(request, "Ya has enviado una solicitud a este usuario.")
+    elif Friendship.objects.filter(user1=request.user, user2=to_user).exists() or Friendship.objects.filter(user1=to_user, user2=request.user).exists():
+        messages.error(request, "Ya eres amigo de este usuario.")
+    else:
+        FriendRequest.objects.create(from_user=request.user, to_user=to_user)
+        messages.success(request, "Solicitud de amistad enviada.")
+    return redirect('home')
+
+@login_required
+def accept_friend_request(request, request_id):
+    friend_request = get_object_or_404(FriendRequest, id=request_id, to_user=request.user)
+    Friendship.objects.create(user1=friend_request.from_user, user2=friend_request.to_user)
+    friend_request.delete()
+    messages.success(request, "Solicitud de amistad aceptada.")
+    return redirect('home')
+
+@login_required
+def reject_friend_request(request, request_id):
+    friend_request = get_object_or_404(FriendRequest, id=request_id, to_user=request.user)
+    friend_request.delete()
+    messages.success(request, "Solicitud de amistad rechazada.")
+    return redirect('home')
+
+@login_required
 def home(request):
-    if request.user.is_authenticated:
-        # Mostrar solo las publicaciones del usuario autenticado
-        posts = Post.objects.filter(user=request.user).order_by('-created_at')
-    else:
-        posts = None
+    posts = Post.objects.filter(user=request.user).order_by('-created_at')
+    users = User.objects.exclude(id=request.user.id)  # Excluir al usuario actual
 
-    # Check to see if logging in
-    if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
-        # Authenticate
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            messages.success(request, "You Have Been Logged In!")
-            return redirect('home')
-        else:
-            messages.error(request, "There Was An Error Logging In, Please Try Again...")
-            return redirect('home')
-    else:
-        return render(request, 'home.html', {'posts': posts})
+    # Obtener amigos del usuario
+    friends_user1 = Friendship.objects.filter(user1=request.user).values_list('user2', flat=True)
+    friends_user2 = Friendship.objects.filter(user2=request.user).values_list('user1', flat=True)
+    friends = set(chain(friends_user1, friends_user2))  # Combinar ambos conjuntos de amigos
 
+    # Excluir amigos actuales de la lista de usuarios
+    users = users.exclude(id__in=friends)
+
+    # Obtener solicitudes de amistad recibidas
+    friend_requests = FriendRequest.objects.filter(to_user=request.user)
+
+    return render(request, 'home.html', {
+        'posts': posts,
+        'users': users,
+        'friend_requests': friend_requests,
+    })
 
 def login_user(request):
     if request.method == 'POST':
@@ -45,7 +73,7 @@ def login_user(request):
 
 def logout_user(request):
 	logout(request)
-	messages.success(request, "You Have Been Logged Out...")
+	messages.success(request, "Has cerrado sesión.")
 	return redirect('home')
 
 
@@ -59,7 +87,7 @@ def register_user(request):
 			password = form.cleaned_data['password1']
 			user = authenticate(username=username, password=password)
 			login(request, user)
-			messages.success(request, "You Have Successfully Registered! Welcome!")
+			messages.success(request, "Te has registrado con éxito")
 			return redirect('home')
 	else:
 		form = SignUpForm()
@@ -67,56 +95,6 @@ def register_user(request):
 
 	return render(request, 'register.html', {'form':form})
 
-
-
-# def customer_record(request, pk):
-# 	if request.user.is_authenticated:
-# 		# Look Up Records
-# 		customer_record = Record.objects.get(id=pk)
-# 		return render(request, 'record.html', {'customer_record':customer_record})
-# 	else:
-# 		messages.success(request, "You Must Be Logged In To View That Page...")
-# 		return redirect('home')
-
-
-
-# def delete_record(request, pk):
-# 	if request.user.is_authenticated:
-# 		delete_it = Record.objects.get(id=pk)
-# 		delete_it.delete()
-# 		messages.success(request, "Record Deleted Successfully...")
-# 		return redirect('home')
-# 	else:
-# 		messages.success(request, "You Must Be Logged In To Do That...")
-# 		return redirect('home')
-
-
-# def add_record(request):
-# 	form = AddRecordForm(request.POST or None)
-# 	if request.user.is_authenticated:
-# 		if request.method == "POST":
-# 			if form.is_valid():
-# 				add_record = form.save()
-# 				messages.success(request, "Record Added...")
-# 				return redirect('home')
-# 		return render(request, 'add_record.html', {'form':form})
-# 	else:
-# 		messages.success(request, "You Must Be Logged In...")
-# 		return redirect('home')
-
-
-# def update_record(request, pk):
-# 	if request.user.is_authenticated:
-# 		current_record = Record.objects.get(id=pk)
-# 		form = AddRecordForm(request.POST or None, instance=current_record)
-# 		if form.is_valid():
-# 			form.save()
-# 			messages.success(request, "Record Has Been Updated!")
-# 			return redirect('home')
-# 		return render(request, 'update_record.html', {'form':form})
-# 	else:
-# 		messages.success(request, "You Must Be Logged In...")
-# 		return redirect('home')
 
 @login_required
 def view_posts(request):
